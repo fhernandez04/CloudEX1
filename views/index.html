@@ -70,6 +70,7 @@
     <th>Author</th>
     <th>Edition</th>
     <th>Pages</th>
+    <th>Year</th>
   </tr>
   {{ range . }}
   <tr id="row-{{ .ID }}">
@@ -77,6 +78,34 @@
     <th> {{ .BookAuthor }} </th>
     <th> {{ .BookEdition }} </th>
     <th> {{ .BookPages }} </th>
+    <th> {{ .BookYear }} </th>
+  </tr>
+{{ end }}
+
+</table>
+{{ end }}
+
+{{ block "authors-table" . }}
+<table>
+  <tr>
+    <th>Author</th>
+  </tr>
+  {{ range . }}
+  <tr>
+    <td>{{ . }}</td>
+  </tr>
+  {{ end }}
+</table>
+{{ end }}
+
+{{ block "years-table" . }}
+<table>
+  <tr>
+    <th>Year</th>
+  </tr>
+  {{ range . }}
+  <tr>
+    <td>{{ . }}</td>
   </tr>
   {{ end }}
 </table>

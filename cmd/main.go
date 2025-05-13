@@ -22,13 +22,13 @@ import (
 // frontend or the database
 // More on these "tags" like `bson:"_id,omitempty"`: https://go.dev/wiki/Well-known-struct-tags
 type BookStore struct {
-	MongoID     primitive.ObjectID `bson:"_id,omitempty"`
-	ID          string
-	BookName    string
-	BookAuthor  string
-	BookEdition string
-	BookPages   string
-	BookYear    string
+	MongoID     primitive.ObjectID `bson:"_id,omitempty" json:"-"`
+	ID          string             `bson:"id" json:"id"`
+	BookName    string             `bson:"title" json:"title"`
+	BookAuthor  string             `bson:"author" json:"author"`
+	BookEdition string             `bson:"edition,omitempty" json:"edition"`
+	BookPages   string             `bson:"pages,omitempty" json:"pages"`
+	BookYear    string             `bson:"year,omitempty" json:"year"`
 }
 
 // Wraps the "Template" struct to associate a necessary method
@@ -156,25 +156,13 @@ func prepareData(client *mongo.Client, coll *mongo.Collection) {
 // it is not :D ), and then we convert it into an array of map. In Golang, you
 // define a map by writing map[<key type>]<value type>{<key>:<value>}.
 // interface{} is a special type in Golang, basically a wildcard...
-func findAllBooks(coll *mongo.Collection) []map[string]interface{} {
+func findAllBooks(coll *mongo.Collection) []BookStore {
 	cursor, err := coll.Find(context.TODO(), bson.D{{}})
 	var results []BookStore
 	if err = cursor.All(context.TODO(), &results); err != nil {
 		panic(err)
 	}
-
-	var ret []map[string]interface{}
-	for _, res := range results {
-		ret = append(ret, map[string]interface{}{
-			"ID":          res.MongoID.Hex(),
-			"BookName":    res.BookName,
-			"BookAuthor":  res.BookAuthor,
-			"BookEdition": res.BookEdition,
-			"BookPages":   res.BookPages,
-		})
-	}
-
-	return ret
+	return results
 }
 
 func main() {
@@ -186,7 +174,8 @@ func main() {
 	defer cancel()
 
 	// TODO: make sure to pass the proper username, password, and port
-	client, err := mongo.Connect(ctx, options.Client().ApplyURI("mongodb://localhost:27017"))
+	// client, err := mongo.Connect(ctx, options.Client().ApplyURI("mongodb://localhost:27017"))
+	client, err := mongo.Connect(ctx, options.Client().ApplyURI("mongodb://mongodb:testmongo@localhost:27017"))
 
 	// This is another way to specify the call of a function. You can define inline
 	// functions (or anonymous functions, similar to the behavior in Python)
@@ -228,11 +217,55 @@ func main() {
 	})
 
 	e.GET("/authors", func(c echo.Context) error {
-		return c.NoContent(http.StatusNoContent)
+		// Search for all books in the collection
+		cursor, err := coll.Find(context.TODO(), bson.M{})
+		if err != nil {
+			return c.String(http.StatusInternalServerError, "Failed to fetch books")
+		}
+		defer cursor.Close(context.TODO())
+
+		// Use a map to store unique authors
+		authorsMap := make(map[string]bool)
+		for cursor.Next(context.TODO()) {
+			var book BookStore
+			if err := cursor.Decode(&book); err == nil && book.BookAuthor != "" {
+				authorsMap[book.BookAuthor] = true
+			}
+		}
+
+		// Convert the map keys to a slice
+		authors := make([]string, 0, len(authorsMap))
+		for author := range authorsMap {
+			authors = append(authors, author)
+		}
+
+		return c.Render(http.StatusOK, "authors-table", authors)
 	})
 
 	e.GET("/years", func(c echo.Context) error {
-		return c.NoContent(http.StatusNoContent)
+		// Search for all books in the collection
+		cursor, err := coll.Find(context.TODO(), bson.M{})
+		if err != nil {
+			return c.String(http.StatusInternalServerError, "Failed to fetch books")
+		}
+		defer cursor.Close(context.TODO())
+
+		// Use a map to store unique years
+		yearsMap := make(map[string]bool)
+		for cursor.Next(context.TODO()) {
+			var book BookStore
+			if err := cursor.Decode(&book); err == nil && book.BookYear != "" {
+				yearsMap[book.BookYear] = true
+			}
+		}
+
+		// Convert the map keys to a slice
+		years := make([]string, 0, len(yearsMap))
+		for year := range yearsMap {
+			years = append(years, year)
+		}
+
+		return c.Render(http.StatusOK, "years-table", years)
 	})
 
 	e.GET("/search", func(c echo.Context) error {
@@ -252,6 +285,82 @@ func main() {
 	e.GET("/api/books", func(c echo.Context) error {
 		books := findAllBooks(coll)
 		return c.JSON(http.StatusOK, books)
+	})
+
+	e.POST("/api/books", func(c echo.Context) error {
+		var book BookStore
+		if err := c.Bind(&book); err != nil { // bind the request body to the book struct
+			return c.String(http.StatusBadRequest, "Invalid input")
+		}
+
+		if book.ID == "" || book.BookName == "" || book.BookAuthor == "" {
+			return c.JSON(http.StatusBadRequest, map[string]string{"error": "id, title and author are required"})
+		}
+
+		// Check if the book already exists
+		filter := bson.M{"id": book.ID}
+		count, err := coll.CountDocuments(context.TODO(), filter)
+		if err != nil {
+			return c.String(http.StatusInternalServerError, "Failed to check for duplicates")
+		}
+		if count > 0 {
+			return c.JSON(http.StatusConflict, map[string]string{"error": "Book with the same ID already exists"})
+		}
+
+		// Insert the new book
+		result, err := coll.InsertOne(context.TODO(), book)
+		if err != nil {
+			return c.String(http.StatusInternalServerError, "Failed to insert book")
+		}
+
+		book.MongoID = result.InsertedID.(primitive.ObjectID)
+		return c.JSON(http.StatusCreated, book)
+	})
+
+	e.PUT("/api/books/:id", func(c echo.Context) error {
+		id := c.Param("id") // get the id from the URL parameter
+
+		var book BookStore
+		if err := c.Bind(&book); err != nil { // bind the request body to the book struct
+			return c.String(http.StatusBadRequest, "Invalid input")
+		}
+
+		if book.BookName == "" || book.BookAuthor == "" {
+			return c.JSON(http.StatusBadRequest, map[string]string{"error": "title and author are required"})
+		}
+
+		book.ID = id // ensure the ID is set to the one from the URL
+
+		filter := bson.M{"id": id}     // filter to find the book by ID
+		update := bson.M{"$set": book} // update the book with the new data
+
+		result, err := coll.UpdateOne(context.TODO(), filter, update) // perform the update
+		// Check if the update was successful
+		if err != nil {
+			return c.String(http.StatusInternalServerError, "Failed to update book")
+		}
+
+		if result.MatchedCount == 0 { // no book found with the given ID
+			return c.String(http.StatusNotFound, "Book not found")
+		}
+
+		return c.JSON(http.StatusOK, book)
+	})
+
+	e.DELETE("/api/books/:id", func(c echo.Context) error {
+		id := c.Param("id")                                   // get the id from the URL parameter
+		filter := bson.M{"id": id}                            // filter to find the book by ID
+		result, err := coll.DeleteOne(context.TODO(), filter) // perform the delete
+		// Check if the delete was successful
+		if err != nil {
+			return c.String(http.StatusInternalServerError, "Failed to delete book")
+		}
+		if result.DeletedCount == 0 { // no book found with the given ID
+			return c.String(http.StatusNotFound, "Book not found")
+		}
+
+		// return status 200 success
+		return c.NoContent(http.StatusOK)
 	})
 
 	// We start the server and bind it to port 3030. For future references, this
