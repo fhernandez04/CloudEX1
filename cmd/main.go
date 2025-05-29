@@ -10,6 +10,8 @@ import (
 	"slices"
 	"time"
 
+	"os"
+
 	"github.com/labstack/echo/v4"
 	"github.com/labstack/echo/v4/middleware"
 	"go.mongodb.org/mongo-driver/bson"
@@ -175,7 +177,13 @@ func main() {
 
 	// TODO: make sure to pass the proper username, password, and port
 	// client, err := mongo.Connect(ctx, options.Client().ApplyURI("mongodb://localhost:27017"))
-	client, err := mongo.Connect(ctx, options.Client().ApplyURI("mongodb://mongodb:testmongo@localhost:27017"))
+	// client, err := mongo.Connect(ctx, options.Client().ApplyURI("mongodb://mongodb:testmongo@localhost:27017"))
+	mongoURI := os.Getenv("MONGO_URI")
+	if mongoURI == "" {
+		mongoURI = "mongodb://mongodb:testmongo@localhost:27017"
+	}
+
+	client, err := mongo.Connect(ctx, options.Client().ApplyURI(mongoURI))
 
 	// This is another way to specify the call of a function. You can define inline
 	// functions (or anonymous functions, similar to the behavior in Python)
