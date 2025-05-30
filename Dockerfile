@@ -41,5 +41,8 @@ COPY --from=builder /app/css ./css
 # Expone el puerto 3030 (para documentación, útil en Docker Compose)
 EXPOSE 3030
 
+HEALTHCHECK --interval=30s --timeout=30s --start-period=5s --retries=3 \
+    CMD curl -f http://localhost:3030/ || exit 1
+
 # Comando por defecto al iniciar el contenedor: ejecuta la app
 CMD ["./app"]

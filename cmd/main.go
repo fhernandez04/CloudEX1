@@ -180,7 +180,7 @@ func main() {
 	// client, err := mongo.Connect(ctx, options.Client().ApplyURI("mongodb://mongodb:testmongo@localhost:27017"))
 	mongoURI := os.Getenv("MONGO_URI")
 	if mongoURI == "" {
-		mongoURI = "mongodb://mongodb:testmongo@localhost:27017"
+		mongoURI = "mongodb://localhost:27017"
 	}
 
 	client, err := mongo.Connect(ctx, options.Client().ApplyURI(mongoURI))
