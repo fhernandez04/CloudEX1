@@ -11,7 +11,7 @@ services:
       - mongodb  # Indica que 'app' debe arrancar después del servicio 'mongodb'
     environment:
       # Variable de entorno que la app usará para conectarse a MongoDB
-      - MONGO_URI=mongodb://mongodb:testmongo@mongodb:27017/mydb?authSource=admin
+      - DATABASE_URI=mongodb://mongodb:testmongo@mongodb:27017/mydb?authSource=admin
     restart: unless-stopped  # Reinicia automáticamente si falla, a menos se haga manualmente
 
   # Servicio de base de datos MongoDB
